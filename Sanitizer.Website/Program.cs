@@ -55,11 +55,11 @@ app.UseSwaggerUI(x =>
     x.RoutePrefix = "api/swagger";
     x.SwaggerEndpoint("/api/swagger/v1/swagger.json", "Sanitizer Api v1");
 });
-// Configure the HTTP request pipeline.
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    
     app.UseHsts();
 }
 

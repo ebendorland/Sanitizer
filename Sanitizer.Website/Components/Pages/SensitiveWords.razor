@@ -135,12 +135,10 @@
 
     private async Task HandleDelayedSearch(ChangeEventArgs e)
     {
-        var searchVal = e.Value?.ToString() ?? ""; // Update the _search variable with the input value
+        var searchVal = e.Value?.ToString() ?? "";
 
-        // Clear the existing timer
         _searchTimer?.Dispose();
 
-        // Create a new timer that triggers the search after the specified delay
         _searchTimer = new System.Threading.Timer(async state =>
         {
             _search = searchVal;

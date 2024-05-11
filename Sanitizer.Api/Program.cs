@@ -8,7 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(x => 
 {
@@ -17,7 +16,7 @@ builder.Services.AddSwaggerGen(x =>
     x.IncludeXmlComments(xmlPath);
     x.SwaggerDoc("v1", new OpenApiInfo { Title = "Sanitizer", Version = "V1" });
 });
-// Implementation
+
 builder.Services.AddSingleton<ISensitiveWordsRepo, MSSqlSanitizerRepo>();
 builder.Services.AddSingleton<SanitizerService>();
 
