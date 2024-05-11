@@ -13,8 +13,6 @@
 
 ## Additional Enhancements
 
-In addition to performance enhancements, here are some additional improvements you could make:
-
 - Enhance error logging and exception handling
 - Integrate FluentValidation for input validation
 - Improve general appearance of the website
