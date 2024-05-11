@@ -1,0 +1,1 @@
+docker-compose -f docker-compose-inf.yml up -d

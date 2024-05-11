@@ -1,0 +1,202 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.QuickGrid
+@using Sanitizer.Core.Models
+@using Sanitizer.Website.Components.Components
+@inject IHttpClientFactory HttpClientFactory
+@page "/"
+
+<PageTitle>Sensitive Words</PageTitle>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <Alert @ref="_alert" />
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <ConfirmationModal @ref="_deleteConfirmation" Title="Delete Confirmation" />
+            <ConfirmationModal @ref="_editConfirmation" Title="Submit Confirmation" />
+        </div>
+    </div>
+    @if (_editingItem)
+    {
+        <EditForm Model="Update" OnSubmit="ShowSubmitConfirmation" FormName="EditWord">
+            <div class="form-group">
+                <label> Old Word: @Update.OldWord</label>
+                <br>
+                <label> New Word:<InputText @bind-Value="Update.NewWord" /> </label>
+            </div>
+            <div style="margin-top: 10px">
+                <button type="submit" class="btn btn-primary">Submit</button>
+                <button @onclick="@(() => Cancel())" class="btn btn-secondary">Cancel</button>
+            </div>
+        </EditForm>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-4">
+                <input type="text" class="form-control" @bind="_search" placeholder="Search/Add..." />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-success" @onclick="() => Create(_search)">Add</button>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col">
+                <QuickGrid ItemsProvider="sensitiveWordsProvider" Pagination="@pagination" @ref="grid">
+                    <PropertyColumn Title="Word" Property="@(c => c)" Sortable="true" IsDefaultSortColumn="true" InitialSortDirection="SortDirection.Ascending" />
+                    <TemplateColumn Title="Action">
+                        <button @onclick="@(() => Edit(context))" class="btn btn-primary">Edit</button>
+                        <button @onclick="@(() => ShowDeleteConfirmation(context))" class="btn btn-danger">Delete</button>
+                    </TemplateColumn>
+                </QuickGrid>
+                @if (_isLoading)
+                {
+                    <div class="text-center">Loading...</div>
+                }
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col">
+                <Paginator State="@pagination" />
+            </div>
+        </div>
+    }
+</div>
+
+
+
+
+
+
+@code {
+    [SupplyParameterFromForm]
+    public SensitiveWord? Update { get; set; }
+    private ConfirmationModal _deleteConfirmation;
+    private ConfirmationModal _editConfirmation;
+    QuickGrid<string>? grid;
+    private Alert _alert;
+    GridItemsProvider<string>? sensitiveWordsProvider;
+    PaginationState pagination = new PaginationState { ItemsPerPage = 10 };
+    HttpClient? httpClient;
+    private string _search = "";
+    private bool _editingItem = false;
+    private bool _isLoading = false;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        httpClient = HttpClientFactory.CreateClient("SensitiveWordsApi");
+        await RefreshData();
+    }
+
+    private async Task RefreshData()
+    {
+        _isLoading = true;
+        sensitiveWordsProvider = async req =>
+        {
+            var page = (req.StartIndex / pagination.ItemsPerPage) + 1;
+            var sortOrder = req.SortByAscending ? 1 : -1;
+            try
+            {
+                var response = await httpClient.GetFromJsonAsync<PaginationResponse<string>>($"GetWordsList?page={page}&pageSize={pagination.ItemsPerPage}&sortOrder={sortOrder}&search={_search}");
+
+                if (response == null)
+                {
+                    return GridItemsProviderResult.From(Array.Empty<string>(), 0);
+                }
+                return GridItemsProviderResult.From(
+                items: response.Data,
+                totalItemCount: response.TotalCount);
+            }
+            catch (Exception ex)
+            {
+                _alert.Message = "An error has occured while loading the Sensitive Words";
+                _alert.Show();
+                return GridItemsProviderResult.From(Array.Empty<string>(), 0);
+            }
+            finally
+            {
+                _isLoading = false;
+                StateHasChanged();
+            }
+        };
+    }
+
+    async Task Edit(string edited)
+    {
+        _editingItem = true;
+        Update = new SensitiveWord(edited, "");
+    }
+
+    private async Task ShowSubmitConfirmation()
+    {
+        _editConfirmation.Message = "Are you sure you want to edit this item?";
+        _editConfirmation.OnConfirmed = async (confirmed) =>
+        {
+            if (confirmed)
+            {
+                await Submit();
+            }
+
+        };
+        _editConfirmation.Show();
+    }
+
+    private async Task ShowDeleteConfirmation(string word)
+    {
+        _deleteConfirmation.Message = "Are you sure you want to delete this item?";
+        _deleteConfirmation.OnConfirmed = async (confirmed) =>
+        {
+            if (confirmed)
+            {
+                await Delete(word);
+            }
+
+        };
+        _deleteConfirmation.Show();
+    }
+
+    async Task Submit()
+    {
+        var response = await httpClient.PutAsJsonAsync<SensitiveWord>("", Update);
+        if (!response.IsSuccessStatusCode)
+        {
+            Update.NewWord = "";
+            _alert.Message = await response.Content.ReadAsStringAsync();
+            _alert.Show();
+        }
+        _editingItem = false;
+        await RefreshData();
+    }
+
+    async Task Cancel()
+    {
+        _editingItem = false;
+    }
+
+    async Task Create(string create)
+    {
+        _editingItem = false;
+        _search = "";
+        var response = await httpClient.PostAsJsonAsync("", create);
+        if (!response.IsSuccessStatusCode)
+        {
+            _alert.Message = await response.Content.ReadAsStringAsync();
+            _alert.Show();
+        }
+        else
+        {
+
+            await RefreshData();
+        }
+    }
+
+    async Task Delete(string deleted)
+    {
+        await httpClient.DeleteAsync($"?sensitiveWord={deleted}");
+        await RefreshData();
+    }
+}
