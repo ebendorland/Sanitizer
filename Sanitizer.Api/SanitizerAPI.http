@@ -1,6 +1,0 @@
-@SanitizerAPI_HostAddress = http://localhost:5179
-
-GET {{SanitizerAPI_HostAddress}}/sanitizer/
-Accept: application/json
-
-###

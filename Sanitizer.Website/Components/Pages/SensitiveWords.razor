@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.QuickGrid
 @using Sanitizer.Core.Models
 @using Sanitizer.Website.Components.Components
+@using System.Timers
 @inject IHttpClientFactory HttpClientFactory
 @page "/"
 
@@ -25,7 +26,7 @@
             <div class="form-group">
                 <label> Old Word: @Update.OldWord</label>
                 <br>
-                <label> New Word:<InputText @bind-Value="Update.NewWord" /> </label>
+                <label> New Word: <InputText @bind-Value="Update.NewWord" /> </label>
             </div>
             <div style="margin-top: 10px">
                 <button type="submit" class="btn btn-primary">Submit</button>
@@ -37,7 +38,7 @@
     {
         <div class="row">
             <div class="col-md-4">
-                <input type="text" class="form-control" @bind="_search" placeholder="Search/Add..." />
+                <input type="text" class="form-control" @bind="_searchValue" @oninput="HandleDelayedSearch" placeholder="Search/Add..." />
             </div>
             <div class="col-md-2">
                 <button class="btn btn-success" @onclick="() => Create(_search)">Add</button>
@@ -82,9 +83,12 @@
     PaginationState pagination = new PaginationState { ItemsPerPage = 10 };
     HttpClient? httpClient;
     private string _search = "";
+    private string _searchValue = "";
+    private System.Threading.Timer _searchTimer;
+    private int _delayMilliseconds = 300;
     private bool _editingItem = false;
     private bool _isLoading = false;
-
+    private Timer _loadingTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -94,13 +98,14 @@
 
     private async Task RefreshData()
     {
-        _isLoading = true;
         sensitiveWordsProvider = async req =>
         {
+            StartLoadingTimer();
             var page = (req.StartIndex / pagination.ItemsPerPage) + 1;
             var sortOrder = req.SortByAscending ? 1 : -1;
             try
             {
+
                 var response = await httpClient.GetFromJsonAsync<PaginationResponse<string>>($"GetWordsList?page={page}&pageSize={pagination.ItemsPerPage}&sortOrder={sortOrder}&search={_search}");
 
                 if (response == null)
@@ -113,19 +118,62 @@
             }
             catch (Exception ex)
             {
+                StopLoadingTimer();
                 _alert.Message = "An error has occured while loading the Sensitive Words";
                 _alert.Show();
+                _isLoading = false;
                 return GridItemsProviderResult.From(Array.Empty<string>(), 0);
             }
             finally
             {
+                StopLoadingTimer();
                 _isLoading = false;
-                StateHasChanged();
+                await InvokeAsync(StateHasChanged);
             }
         };
     }
 
-    async Task Edit(string edited)
+    private async Task HandleDelayedSearch(ChangeEventArgs e)
+    {
+        var searchVal = e.Value?.ToString() ?? ""; // Update the _search variable with the input value
+
+        // Clear the existing timer
+        _searchTimer?.Dispose();
+
+        // Create a new timer that triggers the search after the specified delay
+        _searchTimer = new System.Threading.Timer(async state =>
+        {
+            _search = searchVal;
+            await RefreshData();
+            await InvokeAsync(StateHasChanged);
+        }, null, _delayMilliseconds, Timeout.Infinite);
+    }
+
+    private async Task StartLoadingTimer()
+    {
+        _isLoading = false;
+        _loadingTimer = new Timer(500);
+        _loadingTimer.Elapsed += OnLoadingTimerElapsed;
+        _loadingTimer.AutoReset = false;
+        _loadingTimer.Start();
+    }
+
+    private async void OnLoadingTimerElapsed(object sender, ElapsedEventArgs e)
+    {
+        _isLoading = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void StopLoadingTimer()
+    {
+        if (_loadingTimer != null)
+        {
+            _loadingTimer.Stop();
+            _loadingTimer.Dispose();
+            _isLoading = false;
+        }
+    }
+    private async Task Edit(string edited)
     {
         _editingItem = true;
         Update = new SensitiveWord(edited, "");
@@ -159,7 +207,7 @@
         _deleteConfirmation.Show();
     }
 
-    async Task Submit()
+    private async Task Submit()
     {
         var response = await httpClient.PutAsJsonAsync<SensitiveWord>("", Update);
         if (!response.IsSuccessStatusCode)
@@ -168,19 +216,21 @@
             _alert.Message = await response.Content.ReadAsStringAsync();
             _alert.Show();
         }
+        _search = "";
+        _searchValue = "";
         _editingItem = false;
         await RefreshData();
+        StateHasChanged();
     }
 
-    async Task Cancel()
+    private async Task Cancel()
     {
         _editingItem = false;
     }
 
-    async Task Create(string create)
+    private async Task Create(string create)
     {
         _editingItem = false;
-        _search = "";
         var response = await httpClient.PostAsJsonAsync("", create);
         if (!response.IsSuccessStatusCode)
         {
@@ -189,14 +239,14 @@
         }
         else
         {
-
             await RefreshData();
         }
     }
 
-    async Task Delete(string deleted)
+    private async Task Delete(string deleted)
     {
         await httpClient.DeleteAsync($"?sensitiveWord={deleted}");
         await RefreshData();
+        StateHasChanged();
     }
 }
