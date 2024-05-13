@@ -19,3 +19,4 @@
 - Consider using an ORM like Entity Framework for easier data access, though weigh the performance implications
 - Modularize Blazor website API calls into a controller for better reusability, especially if the system is expected to expand
 - Don't use the new QuickGrid as it isn't super extensible. Loading indicator too hacky.
+- Add some unit testing
